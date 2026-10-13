@@ -1,7 +1,8 @@
 package com.localvision.app
 
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.localvision.app.vision.ModelDescriptor
 import com.localvision.app.vision.ModelRegistry
@@ -29,9 +30,9 @@ sealed interface AnalysisStatus {
     data class Error(val message: String) : AnalysisStatus
 }
 
-class MainViewModel : ViewModel() {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val registry = ModelRegistry.default()
-    private val engine = RegistryBackedVisionEngine(registry)
+    private val engine = RegistryBackedVisionEngine(application, registry)
     private val _state = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = _state.asStateFlow()
     private var analysisJob: Job? = null
@@ -72,6 +73,11 @@ class MainViewModel : ViewModel() {
     fun cancel() {
         analysisJob?.cancel()
         _state.update { it.copy(status = AnalysisStatus.Idle) }
+    }
+
+    override fun onCleared() {
+        engine.close()
+        super.onCleared()
     }
 }
 

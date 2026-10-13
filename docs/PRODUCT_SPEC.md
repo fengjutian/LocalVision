@@ -34,11 +34,13 @@ LocalVision 是 Android 端侧视觉分析应用，也是可复用的模型运�
 
 ### 0.2.0 人脸检测 MVP
 
-- 接入一个经过许可证审查的 ONNX 人脸检测模型。
+- 基线模型确定为 OpenCV Zoo `face_detection_yunet_2023mar.onnx`（FP32），运行时为 ONNX Runtime Android，首发执行后端为 CPU。
 - 支持多人、无脸、侧脸和遮挡样例；结果包括框、置信度与数量。
+- 输出五个人脸关键点（双眼、鼻尖、双侧嘴角）；不输出身份、人脸特征或敏感属性。
 - 记录解码、预处理、推理、后处理耗时。
 - 独立测试集给出 Precision、Recall、mAP；报告按脸尺寸与场景切片。
 - 明确排除身份识别、特征库、年龄/性别/种族等敏感推断。
+- FP32 通过验收后再比较 YuNet INT8；NNAPI 仅作为实验后端，不作为首发默认后端。
 
 ### 0.3.0 姿态 MVP
 
@@ -126,11 +128,68 @@ Compose UI → MainViewModel → VisionEngine
 
 模型清单后续字段：schemaVersion、modelId、version、task、runtime、asset、sha256、license、source、minimumAppVersion、input、outputs、normalization、thresholds、labels、limitations。未知主版本拒绝加载，未知可选字段忽略。
 
+### 8.1 人脸检测实现契约（已批准）
+
+决策日期为 2026-10-13。0.2.0 使用 YuNet FP32 建立正确性与性能基线，不同时引入第二套推理框架。
+
+实现必须满足：
+
+1. 使用固定版本的 `com.microsoft.onnxruntime:onnxruntime-android`，禁止使用 `latest.release`。
+2. `OrtEnvironment` 在进程内复用；同一模型的 `OrtSession` 复用并由模型生命周期统一关闭。
+3. 图片解码需处理 EXIF 方向，并在进入模型前限制最大尺寸，避免超大图造成内存峰值。
+4. `YuNetPreprocessor` 明确定义输入尺寸、缩放/填充方式、通道顺序、数值类型与归一化参数，禁止依赖隐式默认值。
+5. `YuNetPostprocessor` 负责输出维度校验、置信度阈值、NMS、人脸框和五点关键点解析；异常 Tensor 必须返回可理解的模型错误。
+6. 后处理结果统一转换为基于已校正原图的 `[0,1]` 坐标，不允许把模型输入坐标直接交给 UI。
+7. `OnnxFaceDetectionEngine` 通过现有 `VisionEngine` 接口返回类型化结果；ONNX Tensor、Session 或厂商类型不得泄漏到 UI 层。
+8. 推理支持协程取消；所有 `OnnxTensor`、`OrtSession.Result` 等原生资源使用确定性关闭。
+9. 默认仅使用 CPU Execution Provider。NNAPI 必须通过功能一致性和目标真机基准后才能作为可选配置开放。
+10. 未加载模型、模型哈希不符、输入不可读、输出契约不符、推理取消和内存不足必须区分错误类型。
+
+推荐代码边界：
+
+```text
+FaceDetectionEngine
+  ├─ ImageDecoder / ExifNormalizer
+  ├─ YuNetPreprocessor
+  ├─ OnnxRuntimeSession
+  ├─ YuNetPostprocessor
+  └─ FaceResultMapper
+```
+
+模型文件默认随应用发布，使首次运行无需联网。未来模型下载功能上线后，仍必须先完成哈希、签名和兼容性校验，再原子切换活动版本。
+
 ## 9. 模型准入门禁
 
 候选模型只有同时通过以下检查才能合入：来源 URL 与提交版本固定；权重和代码许可证允许目标商业用途与再分发；输入输出契约可复现；ONNX 算子受移动运行时支持；数值一致性测试通过；独立测试集达到门槛；三档真机完成性能测试；生成 SHA-256 与模型卡。
 
 模型卡必须包含用途、非用途、训练/评估数据来源、指标及切片、已知偏差、预处理、阈值、许可证、维护人和回滚版本。许可证不明确即视为不可发布。
+
+### 9.1 YuNet 准入记录要求
+
+合入模型权重的同一次变更必须提交以下记录，缺一不可：
+
+- 模型来源：OpenCV Zoo 的 `models/face_detection_yunet/face_detection_yunet_2023mar.onnx`。
+- 固定来源仓库的精确 commit SHA，不允许仅记录 `main` 分支。
+- 对下载后的原始 ONNX 文件计算 SHA-256，并由构建或测试任务校验。
+- 归档 YuNet 模型目录中的 MIT License；应用的第三方声明中保留版权和许可文本。
+- 单独归档 ONNX Runtime 的许可证与第三方声明。仓库根许可证、模型权重许可证和运行时许可证不得混写为一项。
+- 保存输入/输出节点名称、shape、dtype、预处理、阈值、NMS 参数和五点关键点顺序。
+- 保存模型来源指标，同时明确它们不能替代 LocalVision 独立测试集结果。
+- 记录审查人、审查日期、商业使用与再分发结论；正式商业发布前完成法务复核。
+
+初始模型清单应使用如下逻辑标识；来源 commit、SHA-256 和运行时版本在实际引入文件时填写真实值：
+
+```yaml
+modelId: yunet-face-detection
+version: 2023mar-fp32
+task: FACE_DETECTION
+format: ONNX
+runtime: ONNX_RUNTIME_ANDROID
+license: MIT
+sourcePath: models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+commercialUseReview: pending-legal-review
+redistributionReview: pending-legal-review
+```
 
 ## 10. 测试策略
 
@@ -140,6 +199,18 @@ Compose UI → MainViewModel → VisionEngine
 - 模型回归：固定金标集与困难样例集；比较质量指标和逐样例漂移。
 - 真机：冷/热启动、P50/P95、PSS、30 次连续推理、耗电和温升。
 - 隐私：离线抓包为零；日志扫描；备份配置；缓存清除；云端确认门禁。
+
+### 10.1 YuNet 0.2.0 验收门槛
+
+- 使用至少 100–300 张来源与授权可追溯的图片，覆盖单脸、多人、无人脸、小脸、侧脸、遮挡、暗光和旋转场景。
+- 无人脸图片返回成功的空列表；模型错误不得伪装为空结果。
+- 使用合成基准图验证框与五点关键点坐标，结果叠加误差不超过 2 px。
+- 相同图片、相同模型和相同配置重复执行结果稳定。
+- 单元测试覆盖预处理、输出 shape 校验、阈值边界、NMS、填充逆变换和关键点顺序。
+- 中端目标机预热后 P95 推理以 500 ms 为优化目标，0.2.0 发布上限为 800 ms；峰值增量 PSS 不超过 250 MB。
+- 连续运行 30 次无崩溃、无持续内存增长，并记录温升。
+- FP32 完成全部验收后，INT8 才能进入对照测试；只有质量下降在批准范围内且目标设备确有收益时才可替换 FP32。
+- NNAPI 必须逐设备记录回退情况、数值偏差与 P50/P95；不满足一致性时自动使用 CPU。
 
 ## 11. 数据与训练治理
 
@@ -158,11 +229,12 @@ Compose UI → MainViewModel → VisionEngine
 每个版本只有满足“代码、测试、模型卡/许可证、真机报告、隐私检查、回滚方案、用户可理解的限制说明”才算完成。下一步顺序：
 
 1. 完成 0.1.0 真机 UI 与图片解码测试。
-2. 建立候选模型清单与许可证审查表，选定人脸检测模型。
-3. 接入 ONNX Runtime Mobile 和首个模型适配器。
-4. 建立小型、合法授权的独立评估集，固化质量与性能基线。
-5. 完成人脸结果叠加、详情页和 0.2.0 验收。
-6. 基于真实反馈决定姿态或店铺能力的先后顺序。
+2. 固定 YuNet 2023mar FP32 的来源 commit 与 SHA-256，归档模型 MIT License、ONNX Runtime 许可证和审查记录。
+3. 固定 ONNX Runtime Android 版本，实现 CPU Session、YuNet 前处理、后处理和资源释放。
+4. 实现人脸框、五点关键点、置信度、模型信息与分阶段耗时展示。
+5. 建立小型、合法授权的独立评估集，固化质量与三档真机性能基线。
+6. 完成 0.2.0 验收后，对比 INT8；NNAPI 保持实验状态。
+7. 基于真实反馈决定姿态或店铺能力的先后顺序。
 
 ## 14. 当前已知风险
 

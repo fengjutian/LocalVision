@@ -43,7 +43,12 @@ sealed interface VisionResult {
     ) : VisionResult
 }
 
-data class Detection(val bounds: NormalizedRect, val label: String, val confidence: Float)
+data class Detection(
+    val bounds: NormalizedRect,
+    val label: String,
+    val confidence: Float,
+    val keypoints: List<Keypoint> = emptyList(),
+)
 data class Keypoint(val name: String, val point: NormalizedPoint, val confidence: Float)
 data class Pose(val keypoints: List<Keypoint>, val confidence: Float)
 data class Storefront(
@@ -69,5 +74,7 @@ sealed class AnalysisFailure(message: String) : Exception(message) {
     class ModelUnavailable(task: VisionTask) :
         AnalysisFailure("${task.title}模型尚未安装。当前版本只提供安全的接入骨架，不会生成模拟识别结果。")
     class InvalidImage : AnalysisFailure("无法读取该图片，请换一张图片重试")
+    class InvalidModel(reason: String) : AnalysisFailure("模型校验失败：$reason")
+    class InvalidOutput(reason: String) : AnalysisFailure("模型输出不兼容：$reason")
 }
 

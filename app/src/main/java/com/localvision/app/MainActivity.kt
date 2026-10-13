@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.localvision.app.vision.ModelDescriptor
 import com.localvision.app.vision.VisionTask
+import com.localvision.app.vision.VisionResult
 import com.localvision.app.ui.LocalImagePreview
 
 class MainActivity : ComponentActivity() {
@@ -68,6 +69,8 @@ fun LocalVisionApp(vm: MainViewModel = viewModel()) {
                 Text("图片留在设备上 · 模型能力透明可查", color = Color(0xFF536170))
                 ImagePanel(
                     uri = state.imageUri,
+                    detections = (state.status as? AnalysisStatus.Success)
+                        ?.result?.let { it as? VisionResult.Detections }?.items.orEmpty(),
                     onPick = { picker.launch("image/*") },
                 )
                 Text("选择分析任务", style = MaterialTheme.typography.titleMedium)
@@ -104,7 +107,11 @@ fun LocalVisionApp(vm: MainViewModel = viewModel()) {
 }
 
 @Composable
-private fun ImagePanel(uri: Uri?, onPick: () -> Unit) {
+private fun ImagePanel(
+    uri: Uri?,
+    detections: List<com.localvision.app.vision.Detection>,
+    onPick: () -> Unit,
+) {
     val hasImage = uri != null
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -114,7 +121,7 @@ private fun ImagePanel(uri: Uri?, onPick: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 if (uri == null) Text("尚未选择图片", color = Ink)
-                else LocalImagePreview(uri = uri, modifier = Modifier.fillMaxSize())
+                else LocalImagePreview(uri = uri, detections = detections, modifier = Modifier.fillMaxSize())
             }
             OutlinedButton(onClick = onPick, modifier = Modifier.fillMaxWidth()) {
                 Text(if (hasImage) "更换图片" else "从系统选择图片")
@@ -148,7 +155,11 @@ private fun StatusCard(status: AnalysisStatus) {
             Text(status.message, modifier = Modifier.padding(16.dp), color = Color(0xFF9B2C2C))
         }
         is AnalysisStatus.Success -> Card(modifier = Modifier.fillMaxWidth()) {
-            Text("分析完成，用时 ${status.result.elapsedMs} ms", modifier = Modifier.padding(16.dp))
+            val count = (status.result as? VisionResult.Detections)?.items?.size
+            Text(
+                "分析完成${count?.let { "，检测到 $it 张人脸" }.orEmpty()}，用时 ${status.result.elapsedMs} ms",
+                modifier = Modifier.padding(16.dp),
+            )
         }
     }
 }
