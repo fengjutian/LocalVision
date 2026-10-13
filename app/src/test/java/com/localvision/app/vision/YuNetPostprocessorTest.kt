@@ -32,6 +32,15 @@ class YuNetPostprocessorTest {
     }
 
     @Test
+    fun `applies configured confidence threshold`() {
+        val outputs = emptyOutputs(inputSize = 32)
+        outputs.cls.getValue(8)[0] = 0.25f
+        outputs.obj.getValue(8)[0] = 1f
+        assertEquals(1, YuNetPostprocessor.decode(outputs, scoreThreshold = 0.4f, inputSize = 32).size)
+        assertTrue(YuNetPostprocessor.decode(outputs, scoreThreshold = 0.6f, inputSize = 32).isEmpty())
+    }
+
+    @Test
     fun `removes centered letterbox padding when mapping coordinates`() {
         val outputs = emptyOutputs(inputSize = 32)
         outputs.cls.getValue(8)[0] = 1f

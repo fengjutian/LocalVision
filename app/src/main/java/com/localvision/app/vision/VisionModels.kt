@@ -52,6 +52,19 @@ data class PerformanceBreakdown(
     val postprocessMs: Long = 0,
 )
 
+data class AnalysisOptions(
+    val scoreThreshold: Float = 0.6f,
+    val nmsThreshold: Float = 0.3f,
+)
+
+enum class AnalysisStage(val title: String) {
+    DECODING("正在读取图片"),
+    PREPROCESSING("正在预处理"),
+    LOADING_MODEL("首次加载模型"),
+    INFERENCE("正在本地推理"),
+    POSTPROCESSING("正在整理结果"),
+}
+
 data class Detection(
     val bounds: NormalizedRect,
     val label: String,
@@ -82,8 +95,9 @@ sealed class AnalysisFailure(message: String) : Exception(message) {
     class NoImage : AnalysisFailure("请先选择一张图片")
     class ModelUnavailable(task: VisionTask) :
         AnalysisFailure("${task.title}模型尚未安装。当前版本只提供安全的接入骨架，不会生成模拟识别结果。")
-    class InvalidImage : AnalysisFailure("无法读取该图片，请换一张图片重试")
+    class InvalidImage(reason: String = "无法读取该图片") : AnalysisFailure("图片读取失败：$reason")
     class InvalidModel(reason: String) : AnalysisFailure("模型校验失败：$reason")
     class InvalidOutput(reason: String) : AnalysisFailure("模型输出不兼容：$reason")
+    class OutOfMemory : AnalysisFailure("设备内存不足，请关闭其他应用或选择尺寸更小的图片")
 }
 
