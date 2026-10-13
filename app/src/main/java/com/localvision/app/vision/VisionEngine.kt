@@ -11,7 +11,8 @@ class RegistryBackedVisionEngine(
     context: Context,
     private val registry: ModelRegistry,
 ) : VisionEngine, AutoCloseable {
-    private val faceEngine by lazy { OnnxFaceDetectionEngine(context.applicationContext) }
+    private val faceEngineDelegate = lazy { OnnxFaceDetectionEngine(context.applicationContext) }
+    private val faceEngine by faceEngineDelegate
 
     override suspend fun analyze(image: Uri, task: VisionTask): VisionResult {
         if (image == Uri.EMPTY) throw AnalysisFailure.NoImage()
@@ -23,7 +24,7 @@ class RegistryBackedVisionEngine(
     }
 
     override fun close() {
-        runCatching { faceEngine.close() }
+        if (faceEngineDelegate.isInitialized()) runCatching { faceEngine.close() }
     }
 }
 

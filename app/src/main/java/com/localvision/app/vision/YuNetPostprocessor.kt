@@ -21,6 +21,7 @@ object YuNetPostprocessor {
         scoreThreshold: Float = 0.6f,
         nmsThreshold: Float = 0.3f,
         inputSize: Int = YuNetPreprocessor.INPUT_SIZE,
+        transform: LetterboxTransform = LetterboxTransform.identity(inputSize),
     ): List<Detection> {
         val candidates = mutableListOf<Detection>()
         for (stride in strides) {
@@ -40,17 +41,17 @@ object YuNetPostprocessor {
                 val cy = (row + bbox[index * 4 + 1]) * stride
                 val width = exp(bbox[index * 4 + 2]) * stride
                 val height = exp(bbox[index * 4 + 3]) * stride
-                val left = ((cx - width / 2f) / inputSize).coerceIn(0f, 1f)
-                val top = ((cy - height / 2f) / inputSize).coerceIn(0f, 1f)
-                val right = ((cx + width / 2f) / inputSize).coerceIn(0f, 1f)
-                val bottom = ((cy + height / 2f) / inputSize).coerceIn(0f, 1f)
+                val left = transform.originalX(cx - width / 2f)
+                val top = transform.originalY(cy - height / 2f)
+                val right = transform.originalX(cx + width / 2f)
+                val bottom = transform.originalY(cy + height / 2f)
                 if (right <= left || bottom <= top) continue
                 val keypoints = keypointNames.mapIndexed { pointIndex, name ->
                     Keypoint(
                         name = name,
                         point = NormalizedPoint(
-                            ((kps[index * 10 + pointIndex * 2] + col) * stride / inputSize).coerceIn(0f, 1f),
-                            ((kps[index * 10 + pointIndex * 2 + 1] + row) * stride / inputSize).coerceIn(0f, 1f),
+                            transform.originalX((kps[index * 10 + pointIndex * 2] + col) * stride),
+                            transform.originalY((kps[index * 10 + pointIndex * 2 + 1] + row) * stride),
                         ),
                         confidence = score,
                     )

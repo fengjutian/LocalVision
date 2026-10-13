@@ -17,17 +17,22 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
     private val modelBytes by lazy {
         context.assets.open(MODEL_ASSET).use { it.readBytes() }.also(::verifyModel)
     }
-    private val session: OrtSession by lazy {
+    private val sessionDelegate = lazy {
         environment.createSession(modelBytes, OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             setIntraOpNumThreads(maxOf(1, Runtime.getRuntime().availableProcessors() / 2))
         })
     }
+    private val session: OrtSession by sessionDelegate
 
     suspend fun analyze(uri: Uri): VisionResult.Detections = withContext(Dispatchers.Default) {
         coroutineContext.ensureActive()
         val start = System.nanoTime()
+        val decodeStart = System.nanoTime()
         val bitmap = AndroidImageDecoder.decode(context, uri)
+        val decodeMs = elapsedSince(decodeStart)
+
+        val preprocessStart = System.nanoTime()
         val prepared = try { YuNetPreprocessor.prepare(bitmap) } finally { bitmap.recycle() }
         coroutineContext.ensureActive()
         val tensor = OnnxTensor.createTensor(
@@ -35,13 +40,38 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
             FloatBuffer.wrap(prepared.tensor),
             longArrayOf(1, 3, YuNetPreprocessor.INPUT_SIZE.toLong(), YuNetPreprocessor.INPUT_SIZE.toLong()),
         )
+        val preprocessMs = elapsedSince(preprocessStart)
+
+        val modelLoadStart = System.nanoTime()
+        session
+        val modelLoadMs = elapsedSince(modelLoadStart)
+
+        var inferenceMs = 0L
+        var postprocessMs = 0L
         val detections = tensor.use { input ->
-            session.run(mapOf(INPUT_NAME to input)).use { result ->
+            val inferenceStart = System.nanoTime()
+            val result = session.run(mapOf(INPUT_NAME to input))
+            inferenceMs = elapsedSince(inferenceStart)
+            result.use {
                 coroutineContext.ensureActive()
-                YuNetPostprocessor.decode(readOutputs(result))
+                val postprocessStart = System.nanoTime()
+                YuNetPostprocessor.decode(
+                    outputs = readOutputs(result),
+                    transform = prepared.transform,
+                ).also { postprocessMs = elapsedSince(postprocessStart) }
             }
         }
-        VisionResult.Detections(detections, (System.nanoTime() - start) / 1_000_000)
+        VisionResult.Detections(
+            items = detections,
+            elapsedMs = elapsedSince(start),
+            performance = PerformanceBreakdown(
+                decodeMs = decodeMs,
+                preprocessMs = preprocessMs,
+                modelLoadMs = modelLoadMs,
+                inferenceMs = inferenceMs,
+                postprocessMs = postprocessMs,
+            ),
+        )
     }
 
     private fun readOutputs(result: OrtSession.Result): YuNetOutputs {
@@ -69,8 +99,10 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
         if (hash != MODEL_SHA256) throw AnalysisFailure.InvalidModel("SHA-256 不匹配")
     }
 
+    private fun elapsedSince(startNanos: Long): Long = (System.nanoTime() - startNanos) / 1_000_000
+
     override fun close() {
-        runCatching { session.close() }
+        if (sessionDelegate.isInitialized()) runCatching { session.close() }
     }
 
     companion object {

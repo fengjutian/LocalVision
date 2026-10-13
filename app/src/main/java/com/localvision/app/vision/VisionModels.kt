@@ -30,6 +30,7 @@ sealed interface VisionResult {
     data class Detections(
         val items: List<Detection>,
         override val elapsedMs: Long,
+        val performance: PerformanceBreakdown = PerformanceBreakdown(),
     ) : VisionResult
 
     data class Poses(
@@ -42,6 +43,14 @@ sealed interface VisionResult {
         override val elapsedMs: Long,
     ) : VisionResult
 }
+
+data class PerformanceBreakdown(
+    val decodeMs: Long = 0,
+    val preprocessMs: Long = 0,
+    val modelLoadMs: Long = 0,
+    val inferenceMs: Long = 0,
+    val postprocessMs: Long = 0,
+)
 
 data class Detection(
     val bounds: NormalizedRect,

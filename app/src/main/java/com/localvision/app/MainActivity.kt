@@ -155,11 +155,26 @@ private fun StatusCard(status: AnalysisStatus) {
             Text(status.message, modifier = Modifier.padding(16.dp), color = Color(0xFF9B2C2C))
         }
         is AnalysisStatus.Success -> Card(modifier = Modifier.fillMaxWidth()) {
-            val count = (status.result as? VisionResult.Detections)?.items?.size
-            Text(
-                "分析完成${count?.let { "，检测到 $it 张人脸" }.orEmpty()}，用时 ${status.result.elapsedMs} ms",
-                modifier = Modifier.padding(16.dp),
-            )
+            val detections = status.result as? VisionResult.Detections
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("分析完成，检测到 ${detections?.items?.size ?: 0} 张人脸")
+                Text("总耗时 ${status.result.elapsedMs} ms", style = MaterialTheme.typography.bodySmall)
+                detections?.performance?.let { timing ->
+                    Text(
+                        "解码 ${timing.decodeMs} · 预处理 ${timing.preprocessMs} · " +
+                            "模型加载 ${timing.modelLoadMs} · 推理 ${timing.inferenceMs} · " +
+                            "后处理 ${timing.postprocessMs} ms",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF536170),
+                    )
+                }
+                detections?.items?.take(5)?.forEachIndexed { index, face ->
+                    Text(
+                        "人脸 ${index + 1} · 模型置信度 ${(face.confidence * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
     }
 }

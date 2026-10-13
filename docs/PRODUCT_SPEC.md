@@ -1,9 +1,9 @@
 # LocalVision 产品与技术规格
 
 - 文档版本：2.0
-- 产品版本：0.1.0
+- 产品版本：0.2.0
 - 更新日期：2026-10-13
-- 状态：MVP 开发中
+- 状态：人脸检测 MVP 已实现，待独立测试集与真机验收
 
 ## 1. 产品决策摘要
 
@@ -37,7 +37,8 @@ LocalVision 是 Android 端侧视觉分析应用，也是可复用的模型运�
 - 基线模型确定为 OpenCV Zoo `face_detection_yunet_2023mar.onnx`（FP32），运行时为 ONNX Runtime Android，首发执行后端为 CPU。
 - 支持多人、无脸、侧脸和遮挡样例；结果包括框、置信度与数量。
 - 输出五个人脸关键点（双眼、鼻尖、双侧嘴角）；不输出身份、人脸特征或敏感属性。
-- 记录解码、预处理、推理、后处理耗时。
+- 使用等比例缩放和居中填充，保存变换参数并将模型坐标精确逆映射到 EXIF 校正后的原图。
+- 分别记录解码、预处理、模型加载、推理和后处理耗时，并展示总耗时。
 - 独立测试集给出 Precision、Recall、mAP；报告按脸尺寸与场景切片。
 - 明确排除身份识别、特征库、年龄/性别/种族等敏感推断。
 - FP32 通过验收后再比较 YuNet INT8；NNAPI 仅作为实验后端，不作为首发默认后端。
@@ -177,7 +178,7 @@ FaceDetectionEngine
 - 保存模型来源指标，同时明确它们不能替代 LocalVision 独立测试集结果。
 - 记录审查人、审查日期、商业使用与再分发结论；正式商业发布前完成法务复核。
 
-初始模型清单应使用如下逻辑标识；来源 commit、SHA-256 和运行时版本在实际引入文件时填写真实值：
+当前模型准入记录如下：
 
 ```yaml
 modelId: yunet-face-detection
@@ -185,8 +186,11 @@ version: 2023mar-fp32
 task: FACE_DETECTION
 format: ONNX
 runtime: ONNX_RUNTIME_ANDROID
+runtimeVersion: 1.22.0
 license: MIT
+sourceCommit: 47534e27c9851bb1128ccc0102f1145e27f23f98
 sourcePath: models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+sha256: 8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4
 commercialUseReview: pending-legal-review
 redistributionReview: pending-legal-review
 ```

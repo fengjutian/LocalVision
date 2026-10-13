@@ -31,11 +31,36 @@ class YuNetPostprocessorTest {
         assertTrue(YuNetPostprocessor.iou(high.bounds, low.bounds) > 0.8f)
     }
 
+    @Test
+    fun `removes centered letterbox padding when mapping coordinates`() {
+        val outputs = emptyOutputs(inputSize = 32)
+        outputs.cls.getValue(8)[0] = 1f
+        outputs.obj.getValue(8)[0] = 1f
+        outputs.bbox.getValue(8).apply {
+            this[0] = 1f
+            this[1] = 1f
+        }
+        val result = YuNetPostprocessor.decode(
+            outputs = outputs,
+            inputSize = 32,
+            transform = LetterboxTransform(
+                inputSize = 32,
+                scaledWidth = 32,
+                scaledHeight = 16,
+                padX = 0,
+                padY = 8,
+            ),
+        ).single()
+        assertEquals(0.125f, result.bounds.left, 0.001f)
+        assertEquals(0f, result.bounds.top, 0.001f)
+        assertEquals(0.25f, result.bounds.bottom, 0.001f)
+    }
+
     @Test(expected = AnalysisFailure.InvalidOutput::class)
     fun `rejects incompatible tensor length`() {
         val outputs = emptyOutputs(inputSize = 32)
-        outputs.bbox[8] = FloatArray(1)
-        YuNetPostprocessor.decode(outputs, inputSize = 32)
+        val invalid = outputs.copy(bbox = outputs.bbox.toMutableMap().apply { put(8, FloatArray(1)) })
+        YuNetPostprocessor.decode(invalid, inputSize = 32)
     }
 
     private fun emptyOutputs(inputSize: Int): YuNetOutputs {
