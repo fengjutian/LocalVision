@@ -18,9 +18,9 @@ YuNet 权重来自固定的 OpenCV Zoo 提交，模型文件在加载前执行 S
 - 模型缺失、模型错误、图片错误、内存不足与未知错误分别给出可理解的下一步；未安装真实模型时禁用分析并说明原因，不生成模拟结果。
 - 用户可见文案集中在 `res/values/strings.xml`；结果列表默认折叠但可展开全部，不再静默截断。
 
-自动化验证现状：`gradlew.bat testDebugUnitTest lintDebug assembleDebug` 通过，78 个 JVM 单元测试，lint 0 error。`app/src/androidTest` 已包含 17 条仪器化集成测试（源码已随仓库编译通过 `./gradlew.bat assembleDebugAndroidTest`），覆盖选择图片、取消、换图换任务丢弃旧结果、未安装模型、错误恢复、结果过期、列表展开、进入后台取消和 200% 字体缩放。
+自动化验证现状：`gradlew.bat testDebugUnitTest lintDebug assembleDebug verifyBundledModels` 通过，98 个 JVM 单元测试，lint 0 error。`verifyBundledModels` 会在构建期比对 `assets/models/manifest.json` 登记的 SHA-256，模型被换掉或出现未登记权重时直接让构建失败。`app/src/androidTest` 已包含 17 条仪器化集成测试，覆盖选择图片、取消、换图换任务丢弃旧结果、未安装模型、错误恢复、结果过期、列表展开、进入后台取消和 200% 字体缩放。
 
-**仪器化测试尚未在设备或模拟器上实际执行**——它们需要一台 x86_64 API 目标模拟器：
+仪器化测试的源码随仓库编译通过（`gradlew.bat assembleDebugAndroidTest`），但**尚未在设备或模拟器上实际执行过**。`.github/workflows/android.yml` 已配置 emulator job 来补上这一环，在第一次 CI 跑绿之前，这里不把它写成"已通过"。本地手动跑：
 
 ```powershell
 .\gradlew.bat connectedDebugAndroidTest          # 需要已启动的模拟器或已连接设备
@@ -29,7 +29,15 @@ YuNet 权重来自固定的 OpenCV Zoo 提交，模型文件在加载前执行 S
 - 推荐镜像：Android 14 / API 34 或 API 35 的 `x86_64` 系统镜像（debug APK 含 `arm64-v8a` 与 `x86_64`，release 仍只含 `arm64-v8a`）。
 - 测试图片由 `ImageFixtures` 在测试运行时用 `Canvas` 合成到应用缓存目录并用完即删，仓库不提交任何真实照片；EXIF 旋转 fixture 通过 `ExifInterface` 写入 Orientation 标签生成。
 - 人脸结果相关的 UI 断言由 `ScriptedVisionEngine` fake 提供；只有 `YuNetSmokeTest` 会加载真实权重，且只断言"不崩溃、类型正确、坐标在 0..1"，**不做任何精度或浮点断言**。
-- CI 暂未运行 emulator job（属 N-005 范围），在此之前以上命令需本地执行。
+
+## CI
+
+`.github/workflows/android.yml` 在 push / PR 到 `main` 时运行两个 job：
+
+- **build**（PR 的强制门禁）：JDK 17 + 仓库 Gradle Wrapper，执行 `testDebugUnitTest`、`lintDebug`、`assembleDebug`、`verifyBundledModels`，上传单测报告、lint 报告、模型校验报告和 Debug APK。任一失败即阻断。
+- **emulator**：`needs: build`，只在 main 推送与手动触发时运行（不在 PR 上跑，避免模拟器抖动误伤 PR），执行真实的 `connectedDebugAndroidTest`。
+
+CI 不注入任何 secret、不下载模型（权重随仓库提交并由 `verifyBundledModels` 校验），权限只有 `contents: read`。Gradle 发行版由 `gradle-wrapper.properties` 的 `distributionSha256Sum` 固定摘要。
 
 尚未覆盖的是独立测试集质量报告、三档真机性能与商业/法务复核——这些仍需人工完成，README 与 UI 继续保留"待真机与独立测试集验收"的表述。
 

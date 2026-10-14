@@ -1,0 +1,176 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 只需要读代码。不要在这里放宽：build job 不写回仓库，也不需要任何 secret。
+permissions:
+  contents: read
+
+# 同一分支的新提交取消仍在运行的旧 run，避免排队浪费 runner。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # build：PR 的唯一强制门禁。只做 JVM 单测、lint、模型校验和打包，
+  # 不启模拟器 —— 这些任务稳定且快，是可以长期依赖的基础信号。
+  # 任一环节失败都会让本 job 失败：Gradle 以非零码退出，且 lint 保留
+  # abortOnError（AGP 默认），因此 lint error 同样阻断。
+  # ---------------------------------------------------------------------------
+  build:
+    name: Test + Lint + Assemble
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        # runner 镜像自带 SDK，但 API 35 的 license 需要显式接受，否则
+        # AGP 会在解析依赖时报 "SDK license not accepted"。
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        # 缓存 key 由 Gradle 官方 action 生成，等价于手工拼
+        # hashFiles('**/gradle-wrapper.properties')（决定 Gradle 版本）
+        # + hashFiles('**/*.gradle.kts', '**/gradle.properties')（决定依赖声明）。
+        # 构建脚本一改 key 就变，不会命中过期缓存；同时缓存 wrapper 发行版。
+        # 这里不再用 setup-java 的 cache: gradle，避免同一份缓存存两份。
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify models, run unit tests, lint and assemble
+        # 刻意不加 --warning-mode=all：实测会把 AGP 内部的 3 段废弃 API 堆栈
+        # 全量打进日志，反而淹没我们自己的告警。默认 summary 模式足够。
+        # verifyBundledModels 只挂在 check 和 release 上，而这里跑的是
+        # assembleDebug，所以必须显式调用，否则模型被换掉时 CI 不会红。
+        # 权重是随仓库提交的，不在这里下载任何模型。
+        run: >-
+          ./gradlew --no-daemon --stacktrace
+          testDebugUnitTest
+          lintDebug
+          assembleDebug
+          verifyBundledModels
+
+      # 报告一律 if: always()：失败了才最需要看到报告。
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload model verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-verification
+          path: app/build/reports/model-verification/verified-models.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # emulator：单独一个 job，跑真正的 connectedDebugAndroidTest。
+  #
+  # 为什么不在 PR 上跑：模拟器 job 要下载系统镜像、依赖 KVM，冷启动和
+  # 偶发超时都会变红，而基础门禁的价值恰恰在于"红了就一定有问题"。
+  # 所以它 needs: build —— build 挂了就不必浪费模拟器时间；并且只在
+  # main 推送和手动触发时运行，让仪器化测试在合入前真正跑一次。
+  #
+  # debug APK 含 x86_64，所以 YuNetSmokeTest 能加载真实权重；
+  # 模拟器结果只用于回归，不作为 ARM64 真机性能结论。
+  # ---------------------------------------------------------------------------
+  emulator:
+    name: Instrumented tests (x86_64, API 35)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        # 不开 KVM 模拟器只能跑软件渲染，启动会慢到超时。
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run connectedDebugAndroidTest
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-reports
+          path: |
+            app/build/reports/androidTests/connected/
+            app/build/outputs/androidTest-results/connected/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload emulator log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-log
+          path: emulator/logs/
+          retention-days: 7
+          if-no-files-found: warn
