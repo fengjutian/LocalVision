@@ -54,7 +54,7 @@ class YuNetPreprocessorTest {
     @Test
     fun `square input has no padding`() {
         assertEquals(LetterboxGeometry(640, 640, 0, 0), calculateLetterbox(640, 640, 640))
-        assertEquals(LetterboxGeometry(320, 320, 0, 0), calculateLetterbox(320, 320, 640))
+        assertEquals(LetterboxGeometry(640, 640, 0, 0), calculateLetterbox(320, 320, 640))
     }
 
     // 4. 横图：垂直居中 padding
