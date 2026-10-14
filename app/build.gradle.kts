@@ -15,7 +15,17 @@ android {
         versionCode = 2
         versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // 发布口径只面向真实 ARM64 设备；debug 会在此基础上追加 x86_64 供模拟器使用。
         ndk { abiFilters += "arm64-v8a" }
+    }
+
+    buildTypes {
+        debug {
+            // 标准 x86_64 模拟器需要它才能安装 debug APK 跑 androidTest；
+            // ARM64 真机同样安装 debug/release，因此 debug 仍然包含 arm64-v8a。
+            // 不为 release 增加 x86_64，避免无意扩大发布 APK 的原生库面积。
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        }
     }
 
     buildFeatures { compose = true }

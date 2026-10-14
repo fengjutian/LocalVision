@@ -1,17 +1,13 @@
 package com.localvision.app.vision
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtException
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.nio.FloatBuffer
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
@@ -21,27 +17,35 @@ import kotlin.coroutines.coroutineContext
  *
  * 权重路径与 SHA-256 来自 [ModelDescriptor]（即 [ModelRegistry]），引擎自身不再持有模型常量，
  * 保证"模型是什么"只有一处定义。
+ *
+ * 会话、解码和预处理都是可注入边界，ONNX 类型不会穿透到领域层或 UI，
+ * 因此资源生命周期可以在纯 JVM 测试里验证。
  */
-class OnnxFaceDetectionEngine(
-    private val context: Context,
+class OnnxFaceDetectionEngine internal constructor(
     private val model: ModelDescriptor,
+    private val loadModelBytes: () -> ByteArray,
+    private val sessionFactory: FaceRuntimeSessionFactory,
+    private val decodeImage: (Uri) -> Bitmap,
+    private val prepareImage: (Bitmap) -> PreparedImage,
 ) : AutoCloseable {
-    private val modelAsset: String = checkNotNull(model.assetPath) { "模型 ${model.id} 未声明 assetPath" }
-    private val environment = OrtEnvironment.getEnvironment()
-    private val modelBytes by lazy {
-        context.assets.open(modelAsset).use { it.readBytes() }.also(::verifyModel)
+
+    /** 模型必须自带 asset 路径；这是构造期就能发现的配置错误，不该等到首次分析。 */
+    init {
+        requireAssetPath(model)
     }
-    private val sessionOptionsDelegate = lazy {
-        OrtSession.SessionOptions().apply {
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-            setIntraOpNumThreads(maxOf(1, Runtime.getRuntime().availableProcessors() / 2))
-        }
-    }
-    private val sessionDelegate = lazy {
-        environment.createSession(modelBytes, sessionOptionsDelegate.value)
-    }
-    private val session: OrtSession by sessionDelegate
-    private val runGate = InferenceRunGate<OrtRunControl>()
+
+    constructor(context: Context, model: ModelDescriptor) : this(
+        model = model,
+        loadModelBytes = { context.assets.open(requireAssetPath(model)).use { it.readBytes() } },
+        sessionFactory = OrtFaceRuntimeSessionFactory(),
+        decodeImage = { uri -> AndroidImageDecoder.decode(context, uri) },
+        prepareImage = { bitmap -> YuNetPreprocessor.prepare(bitmap) },
+    )
+
+    private val modelBytes by lazy { loadModelBytes().also(::verifyModel) }
+    private val sessionDelegate = lazy { sessionFactory.create(modelBytes) }
+    private val session: FaceRuntimeSession by sessionDelegate
+    private val runGate = InferenceRunGate<RunControl>()
     private val closeRequested = AtomicBoolean(false)
     private val runtimeClosed = AtomicBoolean(false)
 
@@ -56,7 +60,7 @@ class OnnxFaceDetectionEngine(
         onStage(AnalysisStage.DECODING)
         val decodeStart = System.nanoTime()
         val bitmap = try {
-            AndroidImageDecoder.decode(context, uri)
+            decodeImage(uri)
         } catch (_: OutOfMemoryError) {
             throw AnalysisFailure.OutOfMemory()
         }
@@ -64,13 +68,8 @@ class OnnxFaceDetectionEngine(
 
         onStage(AnalysisStage.PREPROCESSING)
         val preprocessStart = System.nanoTime()
-        val prepared = try { YuNetPreprocessor.prepare(bitmap) } finally { bitmap.recycle() }
+        val prepared = try { prepareImage(bitmap) } finally { bitmap.recycle() }
         coroutineContext.ensureActive()
-        val tensor = OnnxTensor.createTensor(
-            environment,
-            FloatBuffer.wrap(prepared.tensor),
-            longArrayOf(1, 3, YuNetPreprocessor.INPUT_SIZE.toLong(), YuNetPreprocessor.INPUT_SIZE.toLong()),
-        )
         val preprocessMs = elapsedSince(preprocessStart)
 
         val modelLoadStart = System.nanoTime()
@@ -80,29 +79,30 @@ class OnnxFaceDetectionEngine(
 
         var inferenceMs = 0L
         var postprocessMs = 0L
-        val detections = tensor.use { input ->
-            onStage(AnalysisStage.INFERENCE)
-            val inferenceStart = System.nanoTime()
-            var runControl: OrtRunControl? = null
+        onStage(AnalysisStage.INFERENCE)
+        val inferenceStart = System.nanoTime()
+        val detections = runGate.run(sessionFactory::newRunControl) { control ->
             try {
-                runGate.run({ OrtRunControl().also { runControl = it } }) { control ->
+                coroutineContext.ensureActive()
+                if (closeRequested.get()) throw CancellationException("Inference engine is closed")
+                session.run(prepared.tensor, TENSOR_SHAPE, control).use { output ->
+                    inferenceMs = elapsedSince(inferenceStart)
                     coroutineContext.ensureActive()
-                    if (closeRequested.get()) throw CancellationException("Inference engine is closed")
-                    session.run(mapOf(INPUT_NAME to input), control.options).use { result ->
-                        inferenceMs = elapsedSince(inferenceStart)
-                        coroutineContext.ensureActive()
-                        onStage(AnalysisStage.POSTPROCESSING)
-                        val postprocessStart = System.nanoTime()
-                        YuNetPostprocessor.decode(
-                            outputs = readOutputs(result),
-                            transform = prepared.transform,
-                            scoreThreshold = config.scoreThreshold,
-                            nmsThreshold = config.nmsThreshold,
-                        ).also { postprocessMs = elapsedSince(postprocessStart) }
-                    }
+                    onStage(AnalysisStage.POSTPROCESSING)
+                    val postprocessStart = System.nanoTime()
+                    YuNetPostprocessor.decode(
+                        outputs = readOutputs(output),
+                        transform = prepared.transform,
+                        scoreThreshold = config.scoreThreshold,
+                        nmsThreshold = config.nmsThreshold,
+                    ).also { postprocessMs = elapsedSince(postprocessStart) }
                 }
-            } catch (error: OrtException) {
-                if (runControl?.cancellationRequested == true || !coroutineContext.isActive || closeRequested.get()) {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                // 只有在取消、协程退出或引擎关闭期间出现的错误才算取消；
+                // 其余原样上抛，让 ViewModel 映射成可区分的失败类型。
+                if (control.terminationRequested || !coroutineContext.isActive || closeRequested.get()) {
                     throw CancellationException("ONNX inference cancelled").also { it.initCause(error) }
                 }
                 throw error
@@ -110,6 +110,7 @@ class OnnxFaceDetectionEngine(
                 if (closeRequested.get()) closeRuntime()
             }
         }
+
         VisionResult.Detections(
             items = detections,
             elapsedMs = elapsedSince(start),
@@ -123,22 +124,17 @@ class OnnxFaceDetectionEngine(
         )
     }
 
-    private fun readOutputs(result: OrtSession.Result): YuNetOutputs {
-        fun output(prefix: String, stride: Int): FloatArray {
-            val value = result.get("${prefix}_$stride").orElseThrow {
-                AnalysisFailure.InvalidOutput("缺少 ${prefix}_$stride")
-            }
-            val tensor = value as? OnnxTensor
-                ?: throw AnalysisFailure.InvalidOutput("${prefix}_$stride 不是 Tensor")
-            val buffer = tensor.floatBuffer
-            return FloatArray(buffer.remaining()).also { buffer.get(it) }
+    private fun readOutputs(output: FaceRuntimeOutput): YuNetOutputs {
+        fun value(prefix: String, stride: Int): FloatArray {
+            val name = "${prefix}_$stride"
+            return output.floats(name) ?: throw AnalysisFailure.InvalidOutput("缺少 $name")
         }
         val strides = listOf(8, 16, 32)
         return YuNetOutputs(
-            cls = strides.associateWith { output("cls", it) },
-            obj = strides.associateWith { output("obj", it) },
-            bbox = strides.associateWith { output("bbox", it) },
-            kps = strides.associateWith { output("kps", it) },
+            cls = strides.associateWith { value("cls", it) },
+            obj = strides.associateWith { value("obj", it) },
+            bbox = strides.associateWith { value("bbox", it) },
+            kps = strides.associateWith { value("kps", it) },
         )
     }
 
@@ -150,7 +146,7 @@ class OnnxFaceDetectionEngine(
 
     private fun elapsedSince(startNanos: Long): Long = (System.nanoTime() - startNanos) / 1_000_000
 
-    /** Requests native termination for the currently executing ORT run, if any. */
+    /** 请求原生终止当前正在执行的那一次推理；空闲或尚未进入 run 时返回 false。 */
     fun cancelActive(): Boolean = runGate.cancelActive()
 
     override fun close() {
@@ -166,28 +162,16 @@ class OnnxFaceDetectionEngine(
     }
 
     private fun closeRuntime() {
+        // Session 只在当前执行退出互斥区之后才关闭；close() 与运行并发时由调用方延后到这里。
         if (!runtimeClosed.compareAndSet(false, true)) return
         if (sessionDelegate.isInitialized()) runCatching { session.close() }
-        if (sessionOptionsDelegate.isInitialized()) runCatching { sessionOptionsDelegate.value.close() }
     }
 
-    private class OrtRunControl : InferenceRunControl {
-        val options = OrtSession.RunOptions()
-        private val closed = AtomicBoolean(false)
-        private val terminateRequested = AtomicBoolean(false)
-        val cancellationRequested: Boolean get() = terminateRequested.get()
+    private companion object {
+        /** YuNet 输入契约：NCHW、3 通道、640x640。 */
+        val TENSOR_SHAPE = longArrayOf(1, 3, 640, 640)
 
-        override fun cancel() {
-            terminateRequested.set(true)
-            if (!closed.get()) runCatching { options.setTerminate(true) }
-        }
-
-        override fun close() {
-            if (closed.compareAndSet(false, true)) options.close()
-        }
-    }
-
-    companion object {
-        private const val INPUT_NAME = "input"
+        fun requireAssetPath(model: ModelDescriptor): String =
+            checkNotNull(model.assetPath) { "模型 ${model.id} 未声明 assetPath" }
     }
 }

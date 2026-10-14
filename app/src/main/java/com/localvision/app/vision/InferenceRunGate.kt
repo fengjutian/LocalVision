@@ -6,12 +6,13 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 
-internal interface InferenceRunControl : AutoCloseable {
-    fun cancel()
-}
-
-/** Serializes access to a model session and exposes the one active native run for cancellation. */
-internal class InferenceRunGate<C : InferenceRunControl> {
+/**
+ * Serializes access to a model session and exposes the one active native run for cancellation.
+ *
+ * 取消句柄就是运行时的 [RunControl]——不为取消另建第二套状态机，
+ * 因此"同一 Session 串行"与"取消当前 run"永远由同一份状态决定。
+ */
+internal class InferenceRunGate<C : RunControl> {
     private val mutex = Mutex()
     private val active = AtomicReference<C?>(null)
 
@@ -29,7 +30,7 @@ internal class InferenceRunGate<C : InferenceRunControl> {
 
     fun cancelActive(): Boolean {
         val control = active.get() ?: return false
-        control.cancel()
+        control.terminate()
         return true
     }
 

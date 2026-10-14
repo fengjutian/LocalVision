@@ -88,11 +88,15 @@ class InferenceRunGateTest {
         assertFalse(gate.isRunning())
     }
 
-    private class FakeControl : InferenceRunControl {
+    private class FakeControl : RunControl {
         val cancelled = CompletableDeferred<Unit>()
         val closed = AtomicBoolean(false)
+        private var terminated = false
 
-        override fun cancel() {
+        override val terminationRequested: Boolean get() = terminated
+
+        override fun terminate() {
+            terminated = true
             cancelled.complete(Unit)
         }
 
