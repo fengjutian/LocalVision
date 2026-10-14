@@ -24,5 +24,8 @@ object VisionEngineProvider {
     fun currentOverride(): VisionEngine? = override
 
     fun create(context: Context): VisionEngine =
-        override ?: RegistryBackedVisionEngine(context.applicationContext, ModelRegistry.default())
+        override ?: RegistryBackedVisionEngine(
+            context.applicationContext,
+            ModelRegistry.load(context.applicationContext),
+        )
 }

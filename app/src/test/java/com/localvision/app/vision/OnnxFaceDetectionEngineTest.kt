@@ -278,7 +278,7 @@ private fun hashOf(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
 private fun faceModel(sha256: String = hashOf(MODEL_BYTES)): ModelDescriptor =
-    requireNotNull(ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)).copy(sha256 = sha256)
+    requireNotNull(TestModelCatalog.registry().activeModel(VisionTask.FACE_DETECTION)).copy(sha256 = sha256)
 
 private fun engineWith(
     session: FakeSession,

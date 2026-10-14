@@ -4,6 +4,7 @@ import com.localvision.app.vision.Detection
 import com.localvision.app.vision.ModelDescriptor
 import com.localvision.app.vision.ModelRegistry
 import com.localvision.app.vision.NormalizedRect
+import com.localvision.app.vision.TestModelCatalog
 import com.localvision.app.vision.VisionResult
 import com.localvision.app.vision.VisionTask
 import org.json.JSONArray
@@ -14,7 +15,7 @@ import org.junit.Test
 
 class AnalysisHistoryTest {
     private val model: ModelDescriptor =
-        ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+        TestModelCatalog.faceModel()
 
     private fun history(prefs: FakeSharedPreferences = FakeSharedPreferences()) =
         AnalysisHistory(prefs) to prefs

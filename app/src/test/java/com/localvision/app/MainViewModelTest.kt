@@ -13,6 +13,7 @@ import com.localvision.app.vision.NormalizedRect
 import com.localvision.app.vision.VisionEngine
 import com.localvision.app.vision.VisionResult
 import com.localvision.app.vision.VisionTask
+import com.localvision.app.vision.TestModelCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -28,16 +29,16 @@ import org.mockito.Mockito.mock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
-    private val faceModel = ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+    private val faceModel = TestModelCatalog.faceModel()
 
     private val registryWithoutFaceModel = ModelRegistry(
-        ModelRegistry.default().modelsFor(VisionTask.FACE_DETECTION).map { it.copy(installed = false) },
+        TestModelCatalog.registry().modelsFor(VisionTask.FACE_DETECTION).map { it.copy(installed = false) },
     )
 
     private fun viewModel(
         engine: VisionEngine,
         dispatcher: CoroutineDispatcher,
-        registry: ModelRegistry = ModelRegistry.default(),
+        registry: ModelRegistry = TestModelCatalog.registry(),
     ) = MainViewModel(
         application = Application(),
         registry = registry,
@@ -226,7 +227,7 @@ class MainViewModelTest {
         val store = FakeHistory().apply { enabled = true }
         val vm = MainViewModel(
             application = Application(),
-            registry = ModelRegistry.default(),
+            registry = TestModelCatalog.registry(),
             engineOverride = FakeEngine(result = VisionResult.Detections(listOf(detection()), 12L)),
             historyStore = store,
             scopeOverride = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),

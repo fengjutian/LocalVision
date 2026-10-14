@@ -86,7 +86,7 @@ class MainViewModel internal constructor(
 
     constructor(application: Application) : this(
         application = application,
-        registry = ModelRegistry.default(),
+        registry = ModelRegistry.load(application),
         engineOverride = VisionEngineProvider.currentOverride(),
         historyStore = AnalysisHistory(application),
         scopeOverride = null,

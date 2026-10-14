@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "id": "yunet-face-detection",
+      "displayName": "YuNet 人脸检测",
+      "version": "2023mar-fp32",
+      "task": "FACE_DETECTION",
+      "format": "ONNX",
+      "runtime": "ONNX_RUNTIME_ANDROID",
+      "runtimeVersion": "1.22.0",
+      "assetPath": "models/yunet/face_detection_yunet_2023mar.onnx",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/opencv/opencv_zoo",
+      "sourceCommit": "47534e27c9851bb1128ccc0102f1145e27f23f98",
+      "installed": true,
+      "limitations": [
+        "仅检测人脸框与五点关键点，不识别身份，也不保存人脸特征",
+        "模型置信度不是校准后的概率",
+        "尚需完成独立测试集与三档真机验收"
+      ]
+    },
+    {
+      "id": "pending-pose_estimation",
+      "displayName": "待选型模型",
+      "version": "—",
+      "task": "POSE_ESTIMATION",
+      "format": "—",
+      "runtime": "—",
+      "runtimeVersion": "—",
+      "assetPath": null,
+      "sha256": "",
+      "license": "待审查",
+      "sourceUrl": "",
+      "sourceCommit": "",
+      "installed": false,
+      "limitations": [
+        "权重、许可证与真机性能验证完成前不进入发布包"
+      ]
+    },
+    {
+      "id": "pending-storefront_analysis",
+      "displayName": "待选型模型",
+      "version": "—",
+      "task": "STOREFRONT_ANALYSIS",
+      "format": "—",
+      "runtime": "—",
+      "runtimeVersion": "—",
+      "assetPath": null,
+      "sha256": "",
+      "license": "待审查",
+      "sourceUrl": "",
+      "sourceCommit": "",
+      "installed": false,
+      "limitations": [
+        "权重、许可证与真机性能验证完成前不进入发布包"
+      ]
+    }
+  ]
+}

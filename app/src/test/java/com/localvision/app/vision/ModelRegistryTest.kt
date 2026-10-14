@@ -9,7 +9,7 @@ import org.junit.Test
 class ModelRegistryTest {
     @Test
     fun `default catalog installs only reviewed face model`() {
-        val registry = ModelRegistry.default()
+        val registry = TestModelCatalog.registry()
         VisionTask.entries.forEach { task ->
             assertTrue(registry.modelsFor(task).isNotEmpty())
             if (task == VisionTask.FACE_DETECTION) assertNotNull(registry.activeModel(task))
@@ -19,7 +19,7 @@ class ModelRegistryTest {
 
     @Test
     fun `yunet metadata matches the published model card`() {
-        val model = ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+        val model = TestModelCatalog.faceModel()
         assertEquals("yunet-face-detection", model.id)
         assertEquals("2023mar-fp32", model.version)
         assertEquals("ONNX", model.format)
@@ -40,7 +40,7 @@ class ModelRegistryTest {
 
     @Test
     fun `sha short form is a stable prefix`() {
-        val model = ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+        val model = TestModelCatalog.faceModel()
         assertEquals(model.sha256.take(12), model.shortSha256)
         assertEquals(12, model.shortSha256.length)
     }
@@ -72,7 +72,7 @@ class ModelRegistryTest {
 
     @Test
     fun `pending task may omit sha256`() {
-        val pending = ModelRegistry.default().modelsFor(VisionTask.POSE_ESTIMATION).single()
+        val pending = TestModelCatalog.registry().modelsFor(VisionTask.POSE_ESTIMATION).single()
         assertEquals("", pending.sha256)
         assertNull(pending.assetPath)
         assertTrue(!pending.installed)
@@ -91,11 +91,11 @@ class ModelRegistryTest {
     @Test
     fun `uninstalling every model leaves face detection unsupported`() {
         val registry = ModelRegistry(
-            ModelRegistry.default().modelsFor(VisionTask.FACE_DETECTION).map { it.copy(installed = false) },
+            TestModelCatalog.registry().modelsFor(VisionTask.FACE_DETECTION).map { it.copy(installed = false) },
         )
         assertNull(registry.activeModel(VisionTask.FACE_DETECTION))
         assertTrue(!registry.supports(VisionTask.FACE_DETECTION))
     }
 
-    private fun face() = ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+    private fun face() = TestModelCatalog.faceModel()
 }

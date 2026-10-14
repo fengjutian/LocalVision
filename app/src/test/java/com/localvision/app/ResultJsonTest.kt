@@ -4,7 +4,7 @@ import com.localvision.app.vision.AnalysisConfig
 import com.localvision.app.vision.CompletedAnalysis
 import com.localvision.app.vision.Detection
 import com.localvision.app.vision.Keypoint
-import com.localvision.app.vision.ModelRegistry
+import com.localvision.app.vision.TestModelCatalog
 import com.localvision.app.vision.NormalizedPoint
 import com.localvision.app.vision.NormalizedRect
 import com.localvision.app.vision.PerformanceBreakdown
@@ -17,7 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResultJsonTest {
-    private val model = ModelRegistry.default().activeModel(VisionTask.FACE_DETECTION)!!
+    private val model = TestModelCatalog.faceModel()
 
     private fun completed(
         items: List<Detection>,

@@ -1,5 +1,7 @@
 package com.localvision.app.vision
 
+import android.content.Context
+
 /**
  * 结构化模型元数据。
  *
@@ -59,51 +61,27 @@ class ModelRegistry(models: List<ModelDescriptor>) {
         /** 当前实现支持的主版本；未知主版本必须拒绝加载而不是静默忽略。 */
         const val CURRENT_SCHEMA_VERSION = 1
 
-        /** 内置目录。数值必须与 `third_party/yunet/MODEL_CARD.md` 保持一致。 */
-        fun default(): ModelRegistry = ModelRegistry(
-            VisionTask.entries.map { task ->
-                if (task == VisionTask.FACE_DETECTION) yunetFaceDetection() else pending(task)
-            },
+        /**
+         * 生产目录：解析 `assets/models/manifest.json`。
+         *
+         * 权重身份、哈希、来源与许可证都只在那一份清单里定义，构建期 `verifyBundledModels`
+         * 校验的是同一个文件，因此运行时看到的和构建时核对过的不可能是两套数据。
+         *
+         * 读取或解析失败时返回**空目录**而不是抛异常：目录为空时 UI 会说明模型未安装并禁用
+         * 分析，这比让应用在启动时崩溃更可接受，也绝不等于"假装有模型可用"。
+         */
+        fun load(context: Context): ModelRegistry = ModelRegistry(readManifest(context))
+
+        /** 从给定 JSON 文本构造目录；解析失败同样降级为空目录。 */
+        fun fromManifestJson(json: String): ModelRegistry = ModelRegistry(parseOrEmpty(json))
+
+        private fun readManifest(context: Context): List<ModelDescriptor> = parseOrEmpty(
+            runCatching {
+                context.assets.open(ModelCatalog.MANIFEST_ASSET_PATH).use { it.readBytes().toString(Charsets.UTF_8) }
+            }.getOrNull().orEmpty(),
         )
 
-        private fun yunetFaceDetection() = ModelDescriptor(
-            schemaVersion = CURRENT_SCHEMA_VERSION,
-            id = "yunet-face-detection",
-            displayName = "YuNet 人脸检测",
-            version = "2023mar-fp32",
-            task = VisionTask.FACE_DETECTION,
-            format = "ONNX",
-            runtime = "ONNX_RUNTIME_ANDROID",
-            runtimeVersion = "1.22.0",
-            assetPath = "models/yunet/face_detection_yunet_2023mar.onnx",
-            sha256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
-            license = "MIT",
-            sourceUrl = "https://github.com/opencv/opencv_zoo",
-            sourceCommit = "47534e27c9851bb1128ccc0102f1145e27f23f98",
-            installed = true,
-            limitations = listOf(
-                "仅检测人脸框与五点关键点，不识别身份，也不保存人脸特征",
-                "模型置信度不是校准后的概率",
-                "尚需完成独立测试集与三档真机验收",
-            ),
-        )
-
-        private fun pending(task: VisionTask) = ModelDescriptor(
-            schemaVersion = CURRENT_SCHEMA_VERSION,
-            id = "pending-${task.name.lowercase()}",
-            displayName = "待选型模型",
-            version = "—",
-            task = task,
-            format = "—",
-            runtime = "—",
-            runtimeVersion = "—",
-            assetPath = null,
-            sha256 = "",
-            license = "待审查",
-            sourceUrl = "",
-            sourceCommit = "",
-            installed = false,
-            limitations = listOf("权重、许可证与真机性能验证完成前不进入发布包"),
-        )
+        private fun parseOrEmpty(json: String): List<ModelDescriptor> =
+            if (json.isBlank()) emptyList() else runCatching { ModelCatalog.parse(json) }.getOrDefault(emptyList())
     }
 }

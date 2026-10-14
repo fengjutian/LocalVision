@@ -39,7 +39,7 @@ class YuNetSmokeTest {
         val uri = fixtures.plainImage()
         val detector = RegistryBackedVisionEngine(
             application,
-            ModelRegistry.default(),
+            ModelRegistry.load(application),
         ).also { engine = it }
 
         val result = runBlocking { detector.analyze(uri, VisionTask.FACE_DETECTION, AnalysisConfig()) }
