@@ -7,6 +7,7 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.exifinterface.media.ExifInterface
 import kotlin.math.max
 
@@ -29,6 +30,11 @@ object AndroidImageDecoder {
         }
     }
 
+    /**
+     * 平台解码路径。调用方已做 `SDK_INT >= P` 判断，这里用注解把约束显式化；
+     * 否则 lint 无法跨函数识别守卫，会在 minSdk 26 上误报 NewApi。
+     */
+    @RequiresApi(Build.VERSION_CODES.P)
     private fun decodeModern(context: Context, uri: Uri): Bitmap {
         val source = ImageDecoder.createSource(context.contentResolver, uri)
         return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->

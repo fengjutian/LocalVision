@@ -52,9 +52,33 @@ data class PerformanceBreakdown(
     val postprocessMs: Long = 0,
 )
 
-data class AnalysisOptions(
-    val scoreThreshold: Float = 0.6f,
-    val nmsThreshold: Float = 0.3f,
+/**
+ * 一次分析请求的参数快照。
+ *
+ * 阈值只在点击分析时冻结：UI 上的滑杆修改的是"下一次分析要用的参数"。因此成功结果必须
+ * 自带快照，展示弱化和导出都读快照，绝不读当前滑杆值——否则用户会把"参数已改"误读成
+ * "结果已重算"。
+ */
+data class AnalysisConfig(
+    val scoreThreshold: Float = DEFAULT_SCORE_THRESHOLD,
+    val nmsThreshold: Float = DEFAULT_NMS_THRESHOLD,
+) {
+    init {
+        require(scoreThreshold in 0f..1f) { "scoreThreshold 必须在 0..1" }
+        require(nmsThreshold in 0f..1f) { "nmsThreshold 必须在 0..1" }
+    }
+
+    companion object {
+        const val DEFAULT_SCORE_THRESHOLD = 0.6f
+        const val DEFAULT_NMS_THRESHOLD = 0.3f
+    }
+}
+
+/** 成功结果连同产生它的模型与参数，供展示、导出和历史复用。 */
+data class CompletedAnalysis(
+    val result: VisionResult,
+    val model: ModelDescriptor,
+    val config: AnalysisConfig,
 )
 
 enum class AnalysisStage(val title: String) {
@@ -80,17 +104,6 @@ data class Storefront(
     val confidence: Float,
 )
 
-data class ModelDescriptor(
-    val id: String,
-    val displayName: String,
-    val version: String,
-    val task: VisionTask,
-    val format: String,
-    val license: String,
-    val installed: Boolean,
-    val limitations: String,
-)
-
 sealed class AnalysisFailure(message: String) : Exception(message) {
     class NoImage : AnalysisFailure("请先选择一张图片")
     class ModelUnavailable(task: VisionTask) :
@@ -99,5 +112,33 @@ sealed class AnalysisFailure(message: String) : Exception(message) {
     class InvalidModel(reason: String) : AnalysisFailure("模型校验失败：$reason")
     class InvalidOutput(reason: String) : AnalysisFailure("模型输出不兼容：$reason")
     class OutOfMemory : AnalysisFailure("设备内存不足，请关闭其他应用或选择尺寸更小的图片")
+
+    /**
+     * 稳定的 UI 错误分类：同一个异常永远映射到同一类，便于文案统一与自动化断言。
+     * 未知异常一律落到 [FailureKind.UNKNOWN]，不会被误报成图片或模型问题。
+     */
+    val kind: FailureKind
+        get() = when (this) {
+            is NoImage, is InvalidImage -> FailureKind.IMAGE
+            is ModelUnavailable, is InvalidModel, is InvalidOutput -> FailureKind.MODEL
+            is OutOfMemory -> FailureKind.MEMORY
+        }
 }
+
+/** 用户遇到错误后唯一合理的下一步，UI 据此给出可操作建议而不是只显示一句话。 */
+enum class RecoveryAction {
+    RETRY,
+    RESELECT_IMAGE,
+    USE_SMALLER_IMAGE,
+    SELECT_INSTALLED_TASK,
+    NONE,
+}
+
+enum class FailureKind(val label: String, val recovery: RecoveryAction) {
+    IMAGE("图片不可用", RecoveryAction.RESELECT_IMAGE),
+    MODEL("模型不可用", RecoveryAction.SELECT_INSTALLED_TASK),
+    MEMORY("内存不足", RecoveryAction.USE_SMALLER_IMAGE),
+    UNKNOWN("未知错误", RecoveryAction.RETRY),
+}
+
 

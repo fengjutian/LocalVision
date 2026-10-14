@@ -35,9 +35,14 @@ import com.localvision.app.vision.NormalizedRect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * @param threshold 产生当前结果的分析阈值，**不是**当前滑杆值。
+ * @param nearThresholdLabel 接近阈值时的文字标记，避免只靠透明度表达状态。
+ */
 @Composable
 fun LocalImagePreview(
     uri: Uri,
+    modifier: Modifier = Modifier,
     detections: List<Detection> = emptyList(),
     showOverlay: Boolean = true,
     showBoxes: Boolean = true,
@@ -45,8 +50,8 @@ fun LocalImagePreview(
     showLabels: Boolean = true,
     selectedFace: Int? = null,
     threshold: Float = 0.6f,
+    nearThresholdLabel: String = "",
     onFaceClick: (Int?) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var state by remember(uri) { mutableStateOf<PreviewState>(PreviewState.Loading) }
@@ -79,12 +84,14 @@ fun LocalImagePreview(
             PreviewState.Loading -> CircularProgressIndicator()
             is PreviewState.Error -> Text(current.message)
             is PreviewState.Ready -> Box(
-                Modifier.fillMaxSize().graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    translationX = offset.x
-                    translationY = offset.y
-                },
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
             ) {
                 Image(
                     bitmap = current.bitmap,
@@ -93,31 +100,37 @@ fun LocalImagePreview(
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (showOverlay) Canvas(
-                    Modifier.fillMaxSize().pointerInput(detections, current.bitmap) {
-                        detectTapGestures { tap ->
-                            val hit = detections.indices.lastOrNull { index ->
-                                val mapped = CoordinateMapper.toViewport(
-                                    detections[index].bounds,
-                                    current.bitmap.width,
-                                    current.bitmap.height,
-                                    size.width.toFloat(),
-                                    size.height.toFloat(),
-                                )
-                                tap.x in mapped.left..mapped.right && tap.y in mapped.top..mapped.bottom
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(detections, current.bitmap) {
+                            detectTapGestures { tap ->
+                                val hit = detections.indices.lastOrNull { index ->
+                                    val mapped = CoordinateMapper.toViewport(
+                                        detections[index].bounds,
+                                        current.bitmap.width,
+                                        current.bitmap.height,
+                                        size.width.toFloat(),
+                                        size.height.toFloat(),
+                                    )
+                                    tap.x in mapped.left..mapped.right && tap.y in mapped.top..mapped.bottom
+                                }
+                                onFaceClick(hit)
                             }
-                            onFaceClick(hit)
-                        }
-                    },
+                        },
                 ) {
                     detections.forEachIndexed { index, detection ->
                         val rect = CoordinateMapper.toViewport(
-                            detection.bounds, current.bitmap.width, current.bitmap.height, size.width, size.height,
+                            detection.bounds,
+                            current.bitmap.width,
+                            current.bitmap.height,
+                            size.width,
+                            size.height,
                         )
                         val selected = selectedFace == index
-                        val lowConfidence = detection.confidence < threshold + 0.1f
+                        val nearThreshold = detection.confidence < threshold
                         val color = when {
                             selected -> Color(0xFFFFA726)
-                            lowConfidence -> Color(0x8822D3A7)
+                            nearThreshold -> Color(0x8822D3A7)
                             else -> Color(0xFF22D3A7)
                         }
                         if (showBoxes) drawRect(
@@ -129,21 +142,31 @@ fun LocalImagePreview(
                         if (showKeypoints) detection.keypoints.forEach { point ->
                             val mapped = CoordinateMapper.toViewport(
                                 NormalizedRect(point.point.x, point.point.y, point.point.x, point.point.y),
-                                current.bitmap.width, current.bitmap.height, size.width, size.height,
+                                current.bitmap.width,
+                                current.bitmap.height,
+                                size.width,
+                                size.height,
                             )
-                            drawCircle(Color(0xFFFFC857), radius = if (selected) 7f else 5f, center = Offset(mapped.left, mapped.top))
+                            drawCircle(
+                                Color(0xFFFFC857),
+                                radius = if (selected) 7f else 5f,
+                                center = Offset(mapped.left, mapped.top),
+                            )
                         }
-                        if (showLabels) drawContext.canvas.nativeCanvas.drawText(
-                            "${index + 1}  ${(detection.confidence * 100).toInt()}%",
-                            rect.left,
-                            (rect.top - 8f).coerceAtLeast(20f),
-                            android.graphics.Paint().apply {
-                                this.color = android.graphics.Color.WHITE
-                                textSize = 28f
-                                isFakeBoldText = true
-                                setShadowLayer(3f, 1f, 1f, android.graphics.Color.BLACK)
-                            },
-                        )
+                        if (showLabels) {
+                            val suffix = if (nearThreshold) " $nearThresholdLabel" else ""
+                            drawContext.canvas.nativeCanvas.drawText(
+                                "${index + 1}  ${(detection.confidence * 100).toInt()}%$suffix",
+                                rect.left,
+                                (rect.top - 8f).coerceAtLeast(20f),
+                                android.graphics.Paint().apply {
+                                    this.color = android.graphics.Color.WHITE
+                                    textSize = 28f
+                                    isFakeBoldText = true
+                                    setShadowLayer(3f, 1f, 1f, android.graphics.Color.BLACK)
+                                },
+                            )
+                        }
                     }
                 }
             }

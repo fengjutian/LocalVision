@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LocalVision</string>
+    <string name="brand_tagline">图片留在设备上 · 模型能力透明可查</string>
+    <string name="footer_privacy">模型置信度是模型评分，不等于事实概率。应用默认不上传图片、不保存原图副本或人脸特征。</string>
+
+    <string name="action_pick_image">从系统选择图片</string>
+    <string name="action_replace_image">更换图片</string>
+    <string name="action_analyze">开始本地分析</string>
+    <string name="action_reanalyze_with_new_config">使用新参数重新分析</string>
+    <string name="action_cancel_analysis">取消分析</string>
+    <string name="action_retry">重试</string>
+    <string name="action_reselect_image">重新选择图片</string>
+
+    <string name="label_placeholder_no_image">尚未选择图片</string>
+    <string name="hint_preview_gestures">双指缩放/平移，双击复位；点击人脸框可高亮</string>
+    <string name="toggle_overlay_results">查看结果</string>
+    <string name="toggle_overlay_original">查看原图</string>
+    <string name="toggle_boxes">框</string>
+    <string name="toggle_keypoints">关键点</string>
+    <string name="toggle_labels">标签</string>
+
+    <string name="title_task">选择分析任务</string>
+    <string name="title_model_status">模型状态</string>
+    <string name="title_threshold">结果阈值</string>
+    <string name="title_export">保存与分享</string>
+    <string name="title_history">检测历史</string>
+
+    <string name="model_info_unavailable">模型信息不可用</string>
+    <string name="model_missing_blocking_hint">该任务的真实模型尚未安装，已暂停分析。应用不会生成模拟识别结果。</string>
+    <string name="model_summary_format">版本 %1$s · 运行时 %2$s %3$s</string>
+    <string name="model_license_format">许可 %1$s</string>
+    <string name="model_sha_short_format">SHA-256 %1$s…</string>
+    <string name="model_show_details">查看完整信息</string>
+    <string name="model_hide_details">收起完整信息</string>
+    <string name="model_id_format">模型 ID %1$s</string>
+    <string name="model_sha_full_format">完整 SHA-256\n%1$s</string>
+    <string name="model_asset_format">权重文件 %1$s</string>
+    <string name="model_source_format">来源 %1$s\n提交 %2$s</string>
+    <string name="model_copy_sha">复制完整哈希</string>
+    <string name="model_copied">已复制完整哈希</string>
+
+    <string name="threshold_value_format">置信度 ≥ %1$s · NMS %2$s</string>
+    <string name="threshold_hint">阈值修改只影响下一次分析；当前结果仍按生成它时的参数显示。</string>
+    <string name="stale_notice">参数已更改，请重新分析。当前显示的是上一次分析的结果。</string>
+
+    <string name="status_cancelled">分析已取消，未保存本次结果</string>
+    <string name="result_empty">分析成功：未检测到人脸</string>
+    <string name="result_count">分析完成，检测到 %1$d 张人脸</string>
+    <string name="result_total_ms">总耗时 %1$d ms</string>
+    <string name="result_performance_ms">解码 %1$d · 预处理 %2$d · 模型加载 %3$d · 推理 %4$d · 后处理 %5$d ms</string>
+    <string name="result_sort_confidence">按置信度</string>
+    <string name="result_sort_position">按位置</string>
+    <string name="result_face_row">人脸 %1$d · 模型置信度 %2$d%%</string>
+    <string name="result_face_near_threshold">接近阈值</string>
+    <string name="result_show_all">查看全部 %1$d 条</string>
+    <string name="result_collapse">收起列表</string>
+
+    <string name="error_title_format">%1$s · %2$s</string>
+    <string name="recovery_retry">可以重试分析；如果反复失败，请更换图片。</string>
+    <string name="recovery_reselect">图片可能已失效或不受支持，请重新选择一张。</string>
+    <string name="recovery_smaller_image">请关闭其他应用，或选择分辨率更小的图片后重试。</string>
+    <string name="recovery_select_task">请切换到已安装模型的任务。当前版本不会用模拟结果代替。</string>
+    <string name="recovery_none">暂时无法继续分析。</string>
+
+    <string name="export_preserve_exif">保留非位置类 EXIF（默认关闭）</string>
+    <string name="export_save_image">保存标注图</string>
+    <string name="export_json">导出 JSON</string>
+    <string name="export_share">分享</string>
+    <string name="export_privacy_note">导出不会保存人脸裁剪或特征向量；即使勾选 EXIF，也不会复制 GPS 信息。</string>
+    <string name="export_image_done">结果图片已保存</string>
+    <string name="export_image_failed">保存失败：%1$s</string>
+    <string name="export_json_done">JSON 已导出</string>
+    <string name="export_json_failed">导出失败：%1$s</string>
+
+    <string name="share_dialog_title">分享检测结果？</string>
+    <string name="share_dialog_text">分享图片可能包含可识别的人脸。LocalVision 不会在本地保留原图副本，分享目标应用可能有自己的数据政策。</string>
+    <string name="share_confirm">继续分享</string>
+    <string name="share_cancel">取消</string>
+    <string name="share_failed">分享失败：%1$s</string>
+
+    <string name="history_hint">仅保存元数据，30 天自动过期</string>
+    <string name="history_off">默认关闭，不记录图片、URI、缩略图或人脸特征。</string>
+    <string name="history_empty">暂无历史</string>
+    <string name="history_entry">%1$s · %2$d 张 · %3$d ms</string>
+    <string name="history_clear">清除全部历史</string>
+</resources>

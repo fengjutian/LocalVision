@@ -27,6 +27,18 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+
+    lint {
+        // local.properties 是机器本地、已 gitignore 的文件，sdk.dir 必须使用
+        // 原生 Windows 路径；PropertyEscape 对该文件是已知误报。
+        disable += "PropertyEscape"
+    }
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -42,6 +54,9 @@ dependencies {
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260814")
+    testImplementation("org.mockito:mockito-core:5.24.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

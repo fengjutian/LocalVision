@@ -16,10 +16,20 @@ import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
 
-class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
+/**
+ * YuNet + ONNX Runtime CPU 引擎。
+ *
+ * 权重路径与 SHA-256 来自 [ModelDescriptor]（即 [ModelRegistry]），引擎自身不再持有模型常量，
+ * 保证"模型是什么"只有一处定义。
+ */
+class OnnxFaceDetectionEngine(
+    private val context: Context,
+    private val model: ModelDescriptor,
+) : AutoCloseable {
+    private val modelAsset: String = checkNotNull(model.assetPath) { "模型 ${model.id} 未声明 assetPath" }
     private val environment = OrtEnvironment.getEnvironment()
     private val modelBytes by lazy {
-        context.assets.open(MODEL_ASSET).use { it.readBytes() }.also(::verifyModel)
+        context.assets.open(modelAsset).use { it.readBytes() }.also(::verifyModel)
     }
     private val sessionOptionsDelegate = lazy {
         OrtSession.SessionOptions().apply {
@@ -37,7 +47,7 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
 
     suspend fun analyze(
         uri: Uri,
-        options: AnalysisOptions,
+        config: AnalysisConfig,
         onStage: (AnalysisStage) -> Unit,
     ): VisionResult.Detections = withContext(Dispatchers.Default) {
         coroutineContext.ensureActive()
@@ -86,8 +96,8 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
                         YuNetPostprocessor.decode(
                             outputs = readOutputs(result),
                             transform = prepared.transform,
-                            scoreThreshold = options.scoreThreshold,
-                            nmsThreshold = options.nmsThreshold,
+                            scoreThreshold = config.scoreThreshold,
+                            nmsThreshold = config.nmsThreshold,
                         ).also { postprocessMs = elapsedSince(postprocessStart) }
                     }
                 }
@@ -135,7 +145,7 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
     private fun verifyModel(bytes: ByteArray) {
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
-        if (hash != MODEL_SHA256) throw AnalysisFailure.InvalidModel("SHA-256 不匹配")
+        if (hash != model.sha256) throw AnalysisFailure.InvalidModel("SHA-256 不匹配")
     }
 
     private fun elapsedSince(startNanos: Long): Long = (System.nanoTime() - startNanos) / 1_000_000
@@ -178,8 +188,6 @@ class OnnxFaceDetectionEngine(private val context: Context) : AutoCloseable {
     }
 
     companion object {
-        private const val MODEL_ASSET = "models/yunet/face_detection_yunet_2023mar.onnx"
-        private const val MODEL_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
         private const val INPUT_NAME = "input"
     }
 }

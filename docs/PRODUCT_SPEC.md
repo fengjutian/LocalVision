@@ -298,3 +298,21 @@ redistributionReview: pending-legal-review
 - 分享：只在用户确认人脸隐私提示后创建临时标注图并授予目标应用一次性读取权限；临时分享文件超过 24 小时后清理。
 - 历史：默认关闭；开启后仅记录模型、时间、人脸数量和耗时，最多 100 条并在 30 天后自动过期；不记录 URI、图片、缩略图、裁剪或人脸特征。
 
+## 16. 阶段 A：人脸检测产品闭环补齐（已实现）
+
+- 模型目录：`ModelDescriptor` 扩展为 schemaVersion、runtime/runtimeVersion、assetPath、sha256、sourceUrl、sourceCommit 与多条 limitations；`ModelRegistry` 是模型元数据唯一来源，推理引擎、历史记录与导出 JSON 都从目录取值。非法 schema 主版本、非 64 位小写 sha256、已安装但缺少 assetPath 的描述符一律拒绝构造。
+- 模型卡片：接受可空模型，注册项缺失时显示“模型信息不可用”而不是崩溃；展示名称、版本、运行时、许可证、SHA-256 短摘要与全部限制，可展开查看完整哈希、asset 路径与来源提交，并可复制完整哈希。
+- 参数快照与结果过期：阈值等参数在点击分析时冻结为 `AnalysisConfig`；成功结果携带模型与参数快照。展示弱化与导出都读快照，参数变化只标记过期并提示重新分析，不自动触发原生推理。
+- 导出契约 v1：JSON 顶层含 schemaVersion、UTC ISO-8601 createdAt、task、coordinateSystem、model、config、performanceMs、detections；浮点一律为 JSON number 并拒绝 NaN/Infinity；不含图片 URI、文件路径、GPS 或稳定设备标识。
+- 错误恢复：图片、模型、内存、未知四类错误各自绑定一个恢复建议（重试、重新选图、选择更小图片、改选已安装任务）。模型缺失时禁用分析按钮并在按钮上方说明原因，与点击后报错二选一，不重复。
+- 文案与无障碍：用户可见字符串迁入 `res/values/strings.xml`；展示小数绑定当前 Locale，JSON 使用 Locale-independent 数值；结果列表折叠展示并可展开全部，接近阈值项除弱化颜色外还带文字标记。
+
+已完成的自动化验证：`gradlew.bat testDebugUnitTest lintDebug assembleDebug` 通过（53 个 JVM 单元测试，lint 0 error）。
+
+仍未完成，不得据此宣称 0.2.0 已验收：
+
+- 仪器化集成测试（`app/src/androidTest` 为空）、CI 流水线、模型回归与自动化性能报告。
+- 独立测试集质量报告（Precision/Recall/mAP 及切片）、低中高三档 ARM64 真机 P50/P95/PSS/温升。
+- YuNet 与 ONNX Runtime 的商业使用与再分发法务复核。
+- `abiFilters` 目前仅 `arm64-v8a`，模拟器级仪器化测试需按阶段 B 为 debug 变体补 `x86_64`。
+

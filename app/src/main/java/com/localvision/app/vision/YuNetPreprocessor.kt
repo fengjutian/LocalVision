@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import androidx.core.graphics.createBitmap
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -41,7 +42,7 @@ object YuNetPreprocessor {
         val scaledHeight = (source.height * scale).roundToInt().coerceIn(1, INPUT_SIZE)
         val padX = (INPUT_SIZE - scaledWidth) / 2
         val padY = (INPUT_SIZE - scaledHeight) / 2
-        val letterboxed = Bitmap.createBitmap(INPUT_SIZE, INPUT_SIZE, Bitmap.Config.ARGB_8888)
+        val letterboxed = createBitmap(INPUT_SIZE, INPUT_SIZE, Bitmap.Config.ARGB_8888)
         Canvas(letterboxed).apply {
             drawColor(Color.BLACK)
             drawBitmap(

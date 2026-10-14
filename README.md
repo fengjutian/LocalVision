@@ -8,6 +8,18 @@ LocalVision 是隐私优先的 Android 端侧视觉 AI 应用与可插拔推理�
 
 YuNet 权重来自固定的 OpenCV Zoo 提交，模型文件在加载前执行 SHA-256 校验。来源、许可证、输入输出契约与限制见 [模型卡](third_party/yunet/MODEL_CARD.md)。当前构建已通过 JVM 单元测试和 Debug APK 编译；正式发布前仍需完成独立图片测试集及多档 Android 真机验收。
 
+## 实现状态
+
+0.2.x 人脸检测的产品闭环已补齐（对应 `docs/IMPLEMENTATION_BACKLOG.md` 阶段 A）：
+
+- 模型元数据集中在 `ModelRegistry`，含 schema 版本、SHA-256、来源提交、运行时版本与许可证；推理引擎从目录读取权重路径与哈希，不再自带模型常量。
+- 分析参数在点击时冻结为 `AnalysisConfig` 快照；改动阈值不会清空旧结果，也不会把旧结果重绘成新参数，而是标记为过期并提示重新分析。
+- 导出 JSON 使用 v1 契约：包含模型、参数、分阶段耗时与 UTC 时间戳，不含图片 URI、路径、GPS 或设备标识。
+- 模型缺失、模型错误、图片错误、内存不足与未知错误分别给出可理解的下一步；未安装真实模型时禁用分析并说明原因，不生成模拟结果。
+- 用户可见文案集中在 `res/values/strings.xml`；结果列表默认折叠但可展开全部，不再静默截断。
+
+自动化验证现状：`gradlew.bat testDebugUnitTest lintDebug assembleDebug` 通过，53 个 JVM 单元测试，lint 0 error。尚未覆盖的是仪器化集成测试、独立测试集质量报告、三档真机性能与商业/法务复核——这些仍需人工完成，README 与 UI 继续保留“待真机与独立测试集验收”的表述。
+
 ## 构建
 
 1. 安装 JDK 17 与 Android SDK 35。
