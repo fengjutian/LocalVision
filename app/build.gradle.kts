@@ -24,6 +24,8 @@ android {
             // 标准 x86_64 模拟器需要它才能安装 debug APK 跑 androidTest；
             // ARM64 真机同样安装 debug/release，因此 debug 仍然包含 arm64-v8a。
             // 不为 release 增加 x86_64，避免无意扩大发布 APK 的原生库面积。
+            // 代价（已知并接受）：release 在 x86_64 ChromeOS 上不可安装，
+            // lint 会为此报 ChromeOsAbiSupport 警告，属于有意为之而不是遗漏。
             ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         }
     }
@@ -69,6 +71,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.06.01"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    // createAndroidComposeRule 需要 ActivityScenarioRule；这里显式声明，避免依赖传递关系漂移
+    androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

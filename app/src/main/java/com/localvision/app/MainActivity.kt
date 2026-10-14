@@ -58,8 +58,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * 整个屏幕的内容。
+ *
+ * 公开出来是为了让仪器化测试可以在自己的宿主里托管它（例如 200% 字体缩放场景），
+ * 生产仍然由 [MainActivity] 以默认参数调用。
+ */
 @Composable
-private fun LocalVisionApp(vm: MainViewModel = viewModel()) {
+fun LocalVisionApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

@@ -13,6 +13,7 @@ import com.localvision.app.vision.ModelDescriptor
 import com.localvision.app.vision.ModelRegistry
 import com.localvision.app.vision.RegistryBackedVisionEngine
 import com.localvision.app.vision.VisionEngine
+import com.localvision.app.vision.VisionEngineProvider
 import com.localvision.app.vision.VisionResult
 import com.localvision.app.vision.VisionTask
 import kotlinx.coroutines.CancellationException
@@ -86,7 +87,7 @@ class MainViewModel internal constructor(
     constructor(application: Application) : this(
         application = application,
         registry = ModelRegistry.default(),
-        engineOverride = null,
+        engineOverride = VisionEngineProvider.currentOverride(),
         historyStore = AnalysisHistory(application),
         scopeOverride = null,
     )

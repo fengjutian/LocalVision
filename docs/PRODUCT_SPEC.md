@@ -307,12 +307,13 @@ redistributionReview: pending-legal-review
 - 错误恢复：图片、模型、内存、未知四类错误各自绑定一个恢复建议（重试、重新选图、选择更小图片、改选已安装任务）。模型缺失时禁用分析按钮并在按钮上方说明原因，与点击后报错二选一，不重复。
 - 文案与无障碍：用户可见字符串迁入 `res/values/strings.xml`；展示小数绑定当前 Locale，JSON 使用 Locale-independent 数值；结果列表折叠展示并可展开全部，接近阈值项除弱化颜色外还带文字标记。
 
-已完成的自动化验证：`gradlew.bat testDebugUnitTest lintDebug assembleDebug` 通过（53 个 JVM 单元测试，lint 0 error）。
+已完成的自动化验证：`gradlew.bat testDebugUnitTest lintDebug assembleDebug` 通过（78 个 JVM 单元测试，lint 0 error）。
 
 仍未完成，不得据此宣称 0.2.0 已验收：
 
-- 仪器化集成测试（`app/src/androidTest` 为空）、CI 流水线、模型回归与自动化性能报告。
+- 仪器化集成测试**尚未在设备或模拟器上实际执行**。`app/src/androidTest` 已有 17 条用例并可通过 `assembleDebugAndroidTest` 编译，但需要 x86_64 API 34/35 模拟器执行 `./gradlew.bat connectedDebugAndroidTest`。
+- CI 流水线、模型回归与自动化性能报告。
 - 独立测试集质量报告（Precision/Recall/mAP 及切片）、低中高三档 ARM64 真机 P50/P95/PSS/温升。
 - YuNet 与 ONNX Runtime 的商业使用与再分发法务复核。
-- `abiFilters` 目前仅 `arm64-v8a`，模拟器级仪器化测试需按阶段 B 为 debug 变体补 `x86_64`。
+- `abiFilters`：release 仅 `arm64-v8a`；debug 追加 `x86_64` 以支持模拟器仪器化测试。代价是 release 目前无法安装到 x86_64 ChromeOS（lint `ChromeOsAbiSupport` 警告，已知并接受）。
 
